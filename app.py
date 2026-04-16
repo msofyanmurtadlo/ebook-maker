@@ -40,7 +40,8 @@ class EbookGeneratorApp(ctk.CTk):
         self.generated_title = ""
         self.generated_description = ""
         self.generated_content = ""
-        self.cover_image_path = ""
+        self.generated_pricing = ""
+        self.current_author = ""
 
     def _create_input_panel(self):
         self.input_frame = ctk.CTkFrame(self, fg_color=PANEL_COLOR, corner_radius=15)
@@ -58,11 +59,32 @@ class EbookGeneratorApp(ctk.CTk):
         if self.default_api_key:
             self.api_key_entry.insert("0", self.default_api_key)
 
+        # Language Input
+        lang_label = ctk.CTkLabel(self.input_frame, text="Language (Bahasa):", font=ctk.CTkFont(size=14), text_color=TEXT_COLOR)
+        lang_label.pack(pady=(0, 5), padx=20, anchor="w")
+        self.lang_entry = ctk.CTkEntry(self.input_frame, placeholder_text="e.g. Indonesian or English...", height=35)
+        self.lang_entry.pack(pady=(0, 15), padx=20, fill="x")
+        self.lang_entry.insert("0", "Indonesian")
+        
+        # Chapter Count Input
+        chapter_label = ctk.CTkLabel(self.input_frame, text="Number of Chapters:", font=ctk.CTkFont(size=14), text_color=TEXT_COLOR)
+        chapter_label.pack(pady=(0, 5), padx=20, anchor="w")
+        self.chapter_entry = ctk.CTkEntry(self.input_frame, placeholder_text="e.g. 5", height=35)
+        self.chapter_entry.pack(pady=(0, 15), padx=20, fill="x")
+        self.chapter_entry.insert("0", "5")
+
+        # Author Input
+        author_label = ctk.CTkLabel(self.input_frame, text="Author Name:", font=ctk.CTkFont(size=14), text_color=TEXT_COLOR)
+        author_label.pack(pady=(0, 5), padx=20, anchor="w")
+        self.author_entry = ctk.CTkEntry(self.input_frame, placeholder_text="e.g. John Doe", height=35)
+        self.author_entry.pack(pady=(0, 15), padx=20, fill="x")
+        self.author_entry.insert("0", "Admin")
+
         # Idea Input
         idea_label = ctk.CTkLabel(self.input_frame, text="Input Idea / Topic for Ebook:", font=ctk.CTkFont(size=14), text_color=TEXT_COLOR)
         idea_label.pack(pady=(0, 5), padx=20, anchor="w")
         
-        self.idea_textbox = ctk.CTkTextbox(self.input_frame, height=120, font=ctk.CTkFont(size=14))
+        self.idea_textbox = ctk.CTkTextbox(self.input_frame, height=90, font=ctk.CTkFont(size=14))
         self.idea_textbox.pack(pady=(0, 20), padx=20, fill="x")
 
         # Generate Button
@@ -109,19 +131,22 @@ class EbookGeneratorApp(ctk.CTk):
         # Ebook Content
         content_hdr = ctk.CTkLabel(self.result_frame, text="Ebook Content (Chapters):", font=ctk.CTkFont(size=16, weight="bold"), text_color=ACCENT_COLOR)
         content_hdr.pack(pady=(10, 5), padx=20, anchor="w")
-        self.result_content = ctk.CTkTextbox(self.result_frame, height=300, font=ctk.CTkFont(size=14))
+        self.result_content = ctk.CTkTextbox(self.result_frame, height=250, font=ctk.CTkFont(size=14))
         self.result_content.pack(pady=(0, 20), padx=20, fill="x")
         
-        # Image Display Area
-        image_hdr = ctk.CTkLabel(self.result_frame, text="Generated Ebook Cover (Using Gemini Imagen):", font=ctk.CTkFont(size=16, weight="bold"), text_color=ACCENT_COLOR)
-        image_hdr.pack(pady=(10, 5), padx=20, anchor="w")
+        # Pricing Recommendation Area
+        pricing_hdr = ctk.CTkLabel(self.result_frame, text="Pricing & Discount Recommendation:", font=ctk.CTkFont(size=16, weight="bold"), text_color=ACCENT_COLOR)
+        pricing_hdr.pack(pady=(10, 5), padx=20, anchor="w")
         
-        self.image_label = ctk.CTkLabel(self.result_frame, text="No Image Generated Yet. Cover will appear here.", width=300, height=400, fg_color="#181825", corner_radius=10)
-        self.image_label.pack(pady=(0, 20), padx=20)
+        self.result_pricing = ctk.CTkEntry(self.result_frame, font=ctk.CTkFont(size=14), state="readonly", height=35)
+        self.result_pricing.pack(pady=(0, 20), padx=20, fill="x")
 
     def start_generation_thread(self):
         idea = self.idea_textbox.get("1.0", "end-1c").strip()
         self.current_api_key = self.api_key_entry.get().strip()
+        lang = self.lang_entry.get().strip()
+        chapters = self.chapter_entry.get().strip()
+        self.current_author = self.author_entry.get().strip()
         
         if not self.current_api_key:
             self.status_label.configure(text="Error: Please enter your Gemini API Key first!")
@@ -142,18 +167,20 @@ class EbookGeneratorApp(ctk.CTk):
         
         self.result_desc.delete("1.0", "end")
         self.result_content.delete("1.0", "end")
-        self.image_label.configure(image=None, text="Generating image...")
+        self.result_pricing.configure(state="normal")
+        self.result_pricing.delete("0", "end")
+        self.result_pricing.configure(state="readonly")
 
-        thread = threading.Thread(target=self.generate_all_content, args=(idea,))
+        thread = threading.Thread(target=self.generate_all_content, args=(idea, lang, chapters))
         thread.start()
 
-    def generate_all_content(self, idea):
+    def generate_all_content(self, idea, lang, chapters):
         try:
             client = genai.Client(api_key=self.current_api_key)
             
             # 1. Generate SEO Title
             self.update_status(f"Generating SEO Title for '{idea[:20]}...'")
-            title_prompt = f"Provide exactly one highly attractive, SEO friendly title for an ebook to be sold as a digital product. The topic is: {idea}. Only output the title string, no markdown headers or quotes."
+            title_prompt = f"Provide exactly one highly attractive, SEO friendly title in {lang} language for an ebook to be sold as a digital product. The topic is: {idea}. Only output the title string, no markdown headers or quotes."
             title_response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=title_prompt
@@ -163,7 +190,7 @@ class EbookGeneratorApp(ctk.CTk):
 
             # 2. Generate SEO Description
             self.update_status("Generating SEO Description...")
-            desc_prompt = f"Write a persuasive, SEO-friendly product description for the digital ebook titled '{self.generated_title}'. It should convince people to buy it. Include bullet points of what they will learn. No introduction, just the copy."
+            desc_prompt = f"Write a persuasive, SEO-friendly product description in {lang} language for the digital ebook titled '{self.generated_title}'. It should convince people to buy it. Include bullet points of what they will learn. No introduction, just the copy."
             desc_response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=desc_prompt
@@ -173,7 +200,7 @@ class EbookGeneratorApp(ctk.CTk):
 
             # 3. Generate Ebook Content
             self.update_status("Generating full Ebook Content (This might take a while)...")
-            content_prompt = f"Write a comprehensive, professional ebook based on the title '{self.generated_title}'. Include an Introduction, at least 3 detailed chapters, and a Conclusion. Provide high-value information. Use Markdown formatting for headers."
+            content_prompt = f"Write a comprehensive, professional ebook in {lang} language based on the title '{self.generated_title}'. Include an Introduction, exactly {chapters} detailed chapters, and a Conclusion. Provide high-value information. Use Markdown formatting for headers."
             content_response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=content_prompt
@@ -181,50 +208,15 @@ class EbookGeneratorApp(ctk.CTk):
             self.generated_content = content_response.text.strip()
             self.update_ui_textbox(self.result_content, self.generated_content)
             
-            # 4. Generate Image using Gemini Imagen or fallback
-            self.update_status("Generating Ebook Cover Image...")
-            image_prompt = f"A professional minimalist ebook cover design for a book titled '{self.generated_title}'. High quality, modern abstract vector art, typography style, compelling colors, clean layout, no actual text rendered just the visual style."
-            
-            try:
-                image_bytes = None
-                try:
-                    result = client.models.generate_images(
-                        model='imagen-3.0-generate-001',
-                        prompt=image_prompt,
-                        config=types.GenerateImagesConfig(
-                            number_of_images=1,
-                            output_mime_type="image/jpeg",
-                            aspect_ratio="3:4" 
-                        )
-                    )
-                    if result.generated_images:
-                        image_bytes = result.generated_images[0].image.image_bytes
-                except Exception as img_err:
-                    print(f"Gemini Imagen failed or unavailable ({img_err}). Using alternative AI...")
-                    safe_prompt = requests.utils.quote(image_prompt + " clean ebook cover no text")
-                    img_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=600&height=800&nologo=true"
-                    resp = requests.get(img_url)
-                    if resp.status_code == 200:
-                        image_bytes = resp.content
-                
-                if image_bytes:
-                    img = Image.open(BytesIO(image_bytes))
-                    if not os.path.exists("outputs"):
-                        os.makedirs("outputs")
-                    file_name = f"outputs/cover_{self.generated_title.replace(' ', '_')[:20]}.jpg"
-                    file_name = "".join([c for c in file_name if c.isalpha() or c.isdigit() or c==' ' or c=='/' or c=='.' or c=='_']).rstrip()
-                    img.save(file_name)
-                    self.cover_image_path = file_name
-                    
-                    img.thumbnail((300, 400))
-                    ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=img.size)
-                    self.safe_after(lambda: self.image_label.configure(image=ctk_img, text=""))
-                else:
-                    self.safe_after(lambda: self.image_label.configure(text="No image returned."))
-            except Exception as e:
-                print(f"Image generation error: {e}")
-                err_msg = str(e)[:50]
-                self.safe_after(lambda err=err_msg: self.image_label.configure(text=f"Failed to generate cover image. Error: {err}"))
+            # 4. Generate Pricing Recommendation
+            self.update_status("Generating Pricing Recommendation...")
+            pricing_prompt = f"Based on the ebook titled '{self.generated_title}' with {chapters} chapters, suggest a retail price and a discount strategy for selling it online as a digital product. Answer in {lang} language, in one concise sentence (e.g., 'Normal Price: Rp150.000, Discount Price: Rp49.000'). Don't use markdown."
+            pricing_response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=pricing_prompt
+            )
+            self.generated_pricing = pricing_response.text.strip().replace('*', '')
+            self.update_ui_text_entry(self.result_pricing, self.generated_pricing)
 
             self.update_status("Generation Complete!")
             self.safe_after(lambda: self.export_btn.configure(state="normal"))
@@ -271,15 +263,7 @@ class EbookGeneratorApp(ctk.CTk):
             
             pdf = FPDF()
             
-            # --- Page 1: Cover Page (Full/Large) ---
-            if self.cover_image_path and os.path.exists(self.cover_image_path):
-                pdf.add_page()
-                COVER_WIDTH = 190
-                # Posisi center kira-kira
-                x_pos = (pdf.w - COVER_WIDTH) / 2
-                pdf.image(self.cover_image_path, x=x_pos, y=10, w=COVER_WIDTH)
-            
-            # --- Page 2: Title & Copyright Info ---
+            # --- Page 1: Title & Copyright Info ---
             pdf.add_page()
             pdf.set_font('Helvetica', 'B', 28)
             pdf.ln(50)
@@ -290,7 +274,13 @@ class EbookGeneratorApp(ctk.CTk):
             pdf.set_font('Helvetica', 'I', 16)
             pdf.cell(0, 10, "A Comprehensive Guide", new_x="LMARGIN", new_y="NEXT", align="C")
             
-            pdf.ln(40)
+            if self.current_author:
+                pdf.ln(10)
+                pdf.set_font('Helvetica', '', 14)
+                safe_author = self.current_author.encode('latin-1', 'replace').decode('latin-1')
+                pdf.cell(0, 10, f"By {safe_author}", new_x="LMARGIN", new_y="NEXT", align="C")
+            
+            pdf.ln(30)
             pdf.set_font('Helvetica', '', 10)
             pdf.cell(0, 10, "Copyright \xa9 2026. All Rights Reserved.", new_x="LMARGIN", new_y="NEXT", align="C")
             pdf.cell(0, 5, "Generated by AI Ebook Generator Pro", new_x="LMARGIN", new_y="NEXT", align="C")
